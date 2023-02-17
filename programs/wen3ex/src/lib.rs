@@ -20,7 +20,6 @@ pub mod wen3ex {
     // market token to token
     pub fn market_tt_create(
         ctx: Context<MarketTtCreate>,
-        _vault_account_bump: u8,
         deposit_amount: u64,
         receive_amount: u64,
         deposit_token: Pubkey,
@@ -28,7 +27,6 @@ pub mod wen3ex {
     ) -> Result<()> {
         instructions::market_tt::create(
             ctx,
-            _vault_account_bump,
             deposit_amount,
             receive_amount,
             deposit_token,

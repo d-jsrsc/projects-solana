@@ -18,7 +18,7 @@ import { Wen3ex } from "../target/types/wen3ex";
 const VAULT_AUTHORITY_SEED = "vault-authority-seed";
 const VAULT_TOKEN_2_TOKEN_SEED = "vault-token-2-token-seed";
 
-describe.skip("wen3ex token2token", async () => {
+describe("wen3ex token2token", async () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
   const provider = anchor.getProvider();
@@ -66,6 +66,61 @@ describe.skip("wen3ex token2token", async () => {
     // Add your test here.
     const tx = await program.methods.initialize().rpc();
     console.log("Your transaction signature", tx);
+  });
+
+  it("wen3ex token2token before", async () => {
+    await airDrop(creatorKP.publicKey, 2);
+    await airDrop(takerKP.publicKey, 2);
+
+    // 1. create mint
+    await initMint(goldKP, creatorKP);
+    await initMint(rubyKP, takerKP);
+
+    // 2. tokenAccount , creator have gold, taker have ruby
+    const creatorGoldAta = await getATA(
+      creatorKP,
+      goldKP.publicKey,
+      creatorKP.publicKey
+    );
+    const takerRubyAta = await getATA(
+      takerKP,
+      rubyKP.publicKey,
+      takerKP.publicKey
+    );
+
+    // 3. mintTo. creator got 2000 gold, taker got 1000 ruby
+    await mintToken2Ata(
+      creatorKP,
+      goldKP.publicKey,
+      creatorGoldAta.address,
+      creatorAmount
+    );
+    await mintToken2Ata(
+      takerKP,
+      rubyKP.publicKey,
+      takerRubyAta.address,
+      takerAmount
+    );
+
+    const creatorRubyAta = await getATA(
+      creatorKP,
+      rubyKP.publicKey,
+      creatorKP.publicKey
+    );
+    const creatorRubyAccount = await getAccount(
+      connection,
+      creatorRubyAta.address
+    );
+    expect(Number(creatorRubyAccount.amount)).to.eq(0);
+
+    const creatorGoldAccount = await getAccount(
+      connection,
+      creatorGoldAta.address
+    );
+    const takerRubyAccount = await getAccount(connection, takerRubyAta.address);
+
+    expect(Number(creatorGoldAccount.amount)).to.eq(creatorAmount);
+    expect(Number(takerRubyAccount.amount)).to.eq(takerAmount);
   });
 
   it("Create marketAccount token 2 token", async () => {
@@ -255,61 +310,6 @@ describe.skip("wen3ex token2token", async () => {
     expect(marketAccountClosed).to.null;
   });
 
-  before(async () => {
-    await airDrop(creatorKP.publicKey, 2);
-    await airDrop(takerKP.publicKey, 2);
-
-    // 1. create mint
-    await initMint(goldKP, creatorKP);
-    await initMint(rubyKP, takerKP);
-
-    // 2. tokenAccount , creator have gold, taker have ruby
-    const creatorGoldAta = await getATA(
-      creatorKP,
-      goldKP.publicKey,
-      creatorKP.publicKey
-    );
-    const takerRubyAta = await getATA(
-      takerKP,
-      rubyKP.publicKey,
-      takerKP.publicKey
-    );
-
-    // 3. mintTo. creator got 2000 gold, taker got 1000 ruby
-    await mintToken2Ata(
-      creatorKP,
-      goldKP.publicKey,
-      creatorGoldAta.address,
-      creatorAmount
-    );
-    await mintToken2Ata(
-      takerKP,
-      rubyKP.publicKey,
-      takerRubyAta.address,
-      takerAmount
-    );
-
-    const creatorRubyAta = await getATA(
-      creatorKP,
-      rubyKP.publicKey,
-      creatorKP.publicKey
-    );
-    const creatorRubyAccount = await getAccount(
-      connection,
-      creatorRubyAta.address
-    );
-    expect(Number(creatorRubyAccount.amount)).to.eq(0);
-
-    const creatorGoldAccount = await getAccount(
-      connection,
-      creatorGoldAta.address
-    );
-    const takerRubyAccount = await getAccount(connection, takerRubyAta.address);
-
-    expect(Number(creatorGoldAccount.amount)).to.eq(creatorAmount);
-    expect(Number(takerRubyAccount.amount)).to.eq(takerAmount);
-  });
-
   function getVaultPDA() {
     return PublicKey.findProgramAddressSync(
       [
@@ -329,7 +329,7 @@ describe.skip("wen3ex token2token", async () => {
 
   async function createT2tMarket() {
     const [vaultPDA, vaultBump] = getVaultPDA();
-
+    console.log("vaultPDA", vaultPDA.toBase58(), vaultBump);
     const creatorGoldAta = await getATA(
       creatorKP,
       goldKP.publicKey,
@@ -340,32 +340,36 @@ describe.skip("wen3ex token2token", async () => {
       rubyKP.publicKey,
       creatorKP.publicKey
     );
-    await program.methods
-      .marketTtCreate(
-        vaultBump,
-        new anchor.BN(20),
-        new anchor.BN(10),
-        goldKP.publicKey,
-        rubyKP.publicKey
-      )
-      .accounts({
-        creator: creatorKP.publicKey,
-        marketAccount: marketAccountKP.publicKey,
-        vaultTokenAccount: vaultPDA,
-        mint: goldKP.publicKey,
-        depositTokenAccount: creatorGoldAta.address,
-        receiveTokenAccount: creatorRubyAta.address,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      })
-      .preInstructions([
-        await program.account.marketTtAccount.createInstruction(
-          marketAccountKP
-        ),
-      ])
-      .signers([marketAccountKP, creatorKP])
-      .rpc();
+    try {
+      await program.methods
+        .marketTtCreate(
+          new anchor.BN(20),
+          new anchor.BN(10),
+          goldKP.publicKey,
+          rubyKP.publicKey
+        )
+        .accounts({
+          creator: creatorKP.publicKey,
+          marketAccount: marketAccountKP.publicKey,
+          vaultTokenAccount: vaultPDA,
+          mint: goldKP.publicKey,
+          depositTokenAccount: creatorGoldAta.address,
+          receiveTokenAccount: creatorRubyAta.address,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .preInstructions([
+          await program.account.marketTtAccount.createInstruction(
+            marketAccountKP
+          ),
+        ])
+        .signers([marketAccountKP, creatorKP])
+        .rpc();
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
   }
 
   async function mintToken2Ata(

@@ -22,4 +22,8 @@ pub enum Wen3ExError {
     IncorrectCreatorTokenAccount,
     #[msg("NumericalOverflowError")]
     NumericalOverflowError,
+    #[msg("IncorrectVaultAuthorityBump")]
+    IncorrectVaultAuthorityBump,
+    #[msg("IncorrectVaultAuthorityAccount")]
+    IncorrectVaultAuthorityAccount,
 }

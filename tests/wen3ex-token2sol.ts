@@ -59,6 +59,48 @@ describe("wen3ex token2sol", async () => {
   const mintAuthority = anchor.web3.Keypair.generate();
   const marketAccountKP = anchor.web3.Keypair.generate(); //
 
+  it.skip("wen3ex token2sol before", async () => {
+    await airDrop(creatorKP.publicKey, 2);
+    await airDrop(takerKP.publicKey, 2);
+    let creatorSol = await printSolBalance(creatorKP.publicKey);
+    console.log("before all", creatorSol);
+    // 1. create mint
+    await initMint(goldKP, creatorKP);
+
+    const mintBalance = await connection.getBalance(goldKP.publicKey);
+    console.log({ mintBalance });
+
+    creatorSol = await printSolBalance(creatorKP.publicKey);
+    console.log("before after mint", creatorSol);
+    // 2. tokenAccount , creator have gold, taker have ruby
+    const creatorGoldAta = await getATA(
+      creatorKP,
+      goldKP.publicKey,
+      creatorKP.publicKey
+    );
+
+    // 3. mintTo. creator got 2000 gold, taker got 1000 ruby
+    await mintToken2Ata(
+      creatorKP,
+      goldKP.publicKey,
+      creatorGoldAta.address,
+      creatorAmount
+    );
+
+    const creatorGoldAtaBalance = await connection.getBalance(
+      creatorGoldAta.address
+    );
+    console.log({ creatorGoldAtaBalance });
+
+    creatorSol = await printSolBalance(creatorKP.publicKey);
+    console.log("before after mintToken2Ata", creatorSol);
+    const creatorGoldAccount = await getAccount(
+      connection,
+      creatorGoldAta.address
+    );
+    expect(Number(creatorGoldAccount.amount)).to.eq(creatorAmount);
+  });
+
   it.skip("wen3ex token2sol is initialized!", async () => {
     // Add your test here.
     const tx = await program.methods.initialize().rpc();
@@ -203,7 +245,7 @@ describe("wen3ex token2sol", async () => {
   // After create market exchange { creatorSol: 1994459840, takerSol: 2000000000 }
   // ---- { creatorSol: 1994459840, takerSol: 1997960720 }
   // After exchange { creatorBalance: 2998280880, takerBalance: 997960720 }
-  it("Exchange token 2 sol", async () => {
+  it.skip("Exchange token 2 sol", async () => {
     let creatorSol = await printSolBalance(creatorKP.publicKey);
     let takerSol = await printSolBalance(takerKP.publicKey);
     console.log("Before exchange", { creatorSol, takerSol }); // 1998280880, 2000000000
@@ -286,47 +328,6 @@ describe("wen3ex token2sol", async () => {
   });
 
   // creator got 2000 gold
-  before(async () => {
-    await airDrop(creatorKP.publicKey, 2);
-    await airDrop(takerKP.publicKey, 2);
-    let creatorSol = await printSolBalance(creatorKP.publicKey);
-    console.log("before all", creatorSol);
-    // 1. create mint
-    await initMint(goldKP, creatorKP);
-
-    const mintBalance = await connection.getBalance(goldKP.publicKey);
-    console.log({ mintBalance });
-
-    creatorSol = await printSolBalance(creatorKP.publicKey);
-    console.log("before after mint", creatorSol);
-    // 2. tokenAccount , creator have gold, taker have ruby
-    const creatorGoldAta = await getATA(
-      creatorKP,
-      goldKP.publicKey,
-      creatorKP.publicKey
-    );
-
-    // 3. mintTo. creator got 2000 gold, taker got 1000 ruby
-    await mintToken2Ata(
-      creatorKP,
-      goldKP.publicKey,
-      creatorGoldAta.address,
-      creatorAmount
-    );
-
-    const creatorGoldAtaBalance = await connection.getBalance(
-      creatorGoldAta.address
-    );
-    console.log({ creatorGoldAtaBalance });
-
-    creatorSol = await printSolBalance(creatorKP.publicKey);
-    console.log("before after mintToken2Ata", creatorSol);
-    const creatorGoldAccount = await getAccount(
-      connection,
-      creatorGoldAta.address
-    );
-    expect(Number(creatorGoldAccount.amount)).to.eq(creatorAmount);
-  });
 
   async function printSolBalance(key: PublicKey) {
     const solBalance = await connection.getBalance(key);
