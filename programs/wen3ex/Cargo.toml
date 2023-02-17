@@ -1,0 +1,24 @@
+[package]
+name = "wen3ex"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "wen3ex"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+# default = []
+default = ["init-if-needed"]
+init-if-needed = ["anchor-derive-accounts/init-if-needed"]
+
+[dependencies]
+anchor-lang = "0.25.0"
+anchor-spl = "0.25.0"
+anchor-derive-accounts = "0.25.0"
+spl-token = {version = "3.3.0", features = ["no-entrypoint"] }

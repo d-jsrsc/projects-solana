@@ -1,0 +1,17 @@
+[features]
+seeds = false
+skip-lint = false
+
+[programs.localnet]
+projects_solana = "3w6E5AdcCgvtjjufpmDevfqvuuk1hkHNNK69hGVXc6km"
+wen3ex = "Wen3vAue7f8CfWkNhHzyJ8qHyNJBzP8FH2zb7kFAZD3"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "/Users/ttang/.config/solana/456degdQ55UAMDBRfTtxyxPXoT423XSs1LjS9EEAyS36.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

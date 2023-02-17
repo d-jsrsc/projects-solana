@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "forceConsistentCasingInFileNames":true,
+    "types": ["mocha", "chai"],
+    "typeRoots": ["./node_modules/@types"],
+    "lib": ["es2015"],
+    "module": "commonjs",
+    "target": "es6",
+    "noUnusedLocals": true,                /* Report errors on unused locals. */
+    "noUnusedParameters": true,
+    "esModuleInterop": true
+  }
+}
