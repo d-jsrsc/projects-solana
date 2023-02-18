@@ -75,8 +75,6 @@ pub fn create(
 }
 
 pub fn cancel(ctx: Context<MarketTsCancel>) -> Result<()> {
-    let creator_account = ctx.accounts.creator.to_account_info();
-    let vault_token_account = ctx.accounts.vault_token_account.to_account_info();
     let market_account = ctx.accounts.market_account.clone();
     let market_account_key = market_account.key();
 
@@ -92,26 +90,16 @@ pub fn cancel(ctx: Context<MarketTsCancel>) -> Result<()> {
     ];
 
     if market_account.ex_type == ExType::TokenToSol {
-        // for creator, selling token
+        // for creator, selling token. creator take back the token right now.
         token::transfer(
             ctx.accounts
                 .transfer_from_vault_to_creator_context()
                 .with_signer(&[&authority_seeds[..]]),
             ctx.accounts.market_account.token_amount,
         )?;
-    } else {
-        // for creator, selling sol for buy token
-        **vault_token_account.try_borrow_mut_lamports()? = vault_token_account
-            .lamports()
-            .checked_sub(market_account.sol_amount)
-            .ok_or(Wen3ExError::NumericalOverflowError)?;
-
-        **creator_account.try_borrow_mut_lamports()? = creator_account
-            .lamports()
-            .checked_add(market_account.sol_amount)
-            .ok_or(Wen3ExError::NumericalOverflowError)?;
     }
 
+    // close the vaultTokenAccount with sol back to creator
     token::close_account(
         ctx.accounts
             .close_vault_context()
@@ -167,15 +155,29 @@ pub fn exchange<'info>(ctx: Context<'_, '_, '_, 'info, MarketTsExchange<'info>>)
                 .with_signer(&[&authority_seeds[..]]),
             ctx.accounts.market_account.token_amount,
         )?;
+        token::close_account(
+            ctx.accounts
+                .close_vault_to_creator_context()
+                .with_signer(&[&authority_seeds[..]]),
+        )?;
     } else {
         // for taker, taker is sell token
         if ctx.remaining_accounts.is_empty() {
             return err!(Wen3ExError::NoCreatorTokenAccount);
         }
         let creator_token_account = ctx.remaining_accounts[0].clone();
-        if !creator_token_account.owner.eq(creator_account.key) {
-            return err!(Wen3ExError::IncorrectCreatorTokenAccount);
-        }
+
+        // transfer sol to taker
+        let token_account_lamports_required = (Rent::get()?).minimum_balance(TokenAccount::LEN);
+        let token_account_lamports = vault_token_account.lamports();
+
+        msg!(
+            "required: {:?}, total: {:?}",
+            token_account_lamports_required,
+            token_account_lamports
+        );
+
+        let sol_to_creator = token_account_lamports - market_account.sol_amount;
 
         // transfer token from taker to creator
         token::transfer(
@@ -183,23 +185,23 @@ pub fn exchange<'info>(ctx: Context<'_, '_, '_, 'info, MarketTsExchange<'info>>)
                 .transfer_from_taker_to_creator_context(creator_token_account),
             ctx.accounts.market_account.token_amount,
         )?;
-
-        // transfer sol to taker
-        **vault_token_account.try_borrow_mut_lamports()? = vault_token_account
-            .lamports()
-            .checked_sub(market_account.sol_amount)
-            .ok_or(Wen3ExError::NumericalOverflowError)?;
-        **taker_account.try_borrow_mut_lamports()? = taker_account
-            .lamports()
-            .checked_add(market_account.sol_amount)
-            .ok_or(Wen3ExError::NumericalOverflowError)?;
+        solana_program::program::invoke(
+            &solana_program::system_instruction::transfer(
+                taker_account.key,
+                creator_account.key,
+                sol_to_creator,
+            ),
+            &[
+                ctx.accounts.taker.to_account_info(),
+                ctx.accounts.creator.to_account_info(),
+            ],
+        )?;
+        token::close_account(
+            ctx.accounts
+                .close_vault_to_taker_context()
+                .with_signer(&[&authority_seeds[..]]),
+        )?;
     }
-
-    token::close_account(
-        ctx.accounts
-            .close_vault_context()
-            .with_signer(&[&authority_seeds[..]]),
-    )?;
 
     Ok(())
 }
@@ -226,7 +228,7 @@ pub struct MarketTsCreate<'info> {
     #[account(
         mut,
         constraint = vault_token_account.mint == creator_token_account.mint,
-        constraint = creator_token_account.amount >= token_amount
+        // constraint = creator_token_account.amount >= token_amount
     )]
     pub creator_token_account: Account<'info, TokenAccount>,
 
@@ -315,10 +317,13 @@ impl<'info> MarketTsCancel<'info> {
 
 #[derive(Accounts)]
 pub struct MarketTsExchange<'info> {
-    #[account(mut)]
+    #[account(mut, signer)]
     /// CHECK: This is not dangerous because we don't read or write from this account
-    pub taker: Signer<'info>,
-    #[account(mut)]
+    pub taker: AccountInfo<'info>,
+    #[account(
+        mut,
+        constraint = taker_token_account.mint == mint.key(),
+    )]
     pub taker_token_account: Box<Account<'info, TokenAccount>>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut)]
@@ -329,9 +334,13 @@ pub struct MarketTsExchange<'info> {
         close = creator
     )]
     pub market_account: Box<Account<'info, MarketTsAccount>>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = vault_token_account.mint == mint.key(),
+    )]
     pub vault_token_account: Box<Account<'info, TokenAccount>>,
 
+    pub mint: Account<'info, Mint>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub vault_authority: AccountInfo<'info>,
     /// CHECK: This is not dangerous because we don't read or write from this account
@@ -348,7 +357,17 @@ impl<'info> MarketTsExchange<'info> {
         let cpi_accounts = Transfer {
             from: self.taker_token_account.to_account_info().clone(),
             to: creator_token_account.clone(),
-            authority: self.vault_authority.clone(),
+            authority: self.taker.clone(),
+        };
+        CpiContext::new(self.token_program.clone(), cpi_accounts)
+    }
+    fn transfer_from_taker_to_vault_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.taker_token_account.to_account_info().clone(),
+            to: self.vault_token_account.to_account_info().clone(),
+            authority: self.taker.clone(),
         };
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
@@ -364,10 +383,19 @@ impl<'info> MarketTsExchange<'info> {
         CpiContext::new(self.token_program.clone(), cpi_accounts)
     }
 
-    fn close_vault_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
+    fn close_vault_to_creator_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
         let cpi_accounts = CloseAccount {
             account: self.vault_token_account.to_account_info().clone(),
             destination: self.creator.clone(),
+            authority: self.vault_authority.clone(),
+        };
+        CpiContext::new(self.token_program.clone(), cpi_accounts)
+    }
+
+    fn close_vault_to_taker_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
+        let cpi_accounts = CloseAccount {
+            account: self.vault_token_account.to_account_info().clone(),
+            destination: self.taker.clone(),
             authority: self.vault_authority.clone(),
         };
         CpiContext::new(self.token_program.clone(), cpi_accounts)

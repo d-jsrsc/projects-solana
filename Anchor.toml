@@ -10,7 +10,7 @@ wen3ex = "Wen3vAue7f8CfWkNhHzyJ8qHyNJBzP8FH2zb7kFAZD3"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "/Users/ttang/.config/solana/456degdQ55UAMDBRfTtxyxPXoT423XSs1LjS9EEAyS36.json"
 
 [scripts]

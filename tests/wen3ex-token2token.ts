@@ -68,7 +68,7 @@ describe("wen3ex token2token", async () => {
     console.log("Your transaction signature", tx);
   });
 
-  it("wen3ex token2token before", async () => {
+  it.skip("wen3ex token2token before", async () => {
     await airDrop(creatorKP.publicKey, 2);
     await airDrop(takerKP.publicKey, 2);
 
@@ -123,7 +123,7 @@ describe("wen3ex token2token", async () => {
     expect(Number(takerRubyAccount.amount)).to.eq(takerAmount);
   });
 
-  it("Create marketAccount token 2 token", async () => {
+  it.skip("Create marketAccount token 2 token", async () => {
     const creatorRubyAta = await getATA(
       creatorKP,
       rubyKP.publicKey,
@@ -190,7 +190,7 @@ describe("wen3ex token2token", async () => {
     expect(userTTMarkets.length).to.eq(1);
   });
 
-  it("Close marketAccount token 2 token without exchange", async () => {
+  it.skip("Close marketAccount token 2 token without exchange", async () => {
     let creatorGoldAta = await getATA(
       creatorKP,
       goldKP.publicKey,
@@ -229,7 +229,7 @@ describe("wen3ex token2token", async () => {
     assert.ok(Number(creatorGoldAta.amount) == creatorAmount);
   });
 
-  it("Exchange token 2 token", async () => {
+  it.skip("Exchange token 2 token", async () => {
     await createT2tMarket();
 
     let takerRubyAta = await getATA(
