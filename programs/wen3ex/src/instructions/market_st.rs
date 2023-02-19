@@ -1,13 +1,20 @@
-use anchor_lang::{prelude::*, solana_program};
+use anchor_lang::{
+    prelude::*,
+    solana_program::{self, program::invoke, system_instruction},
+};
 use anchor_spl::token;
 use spl_token::instruction::AuthorityType;
 
+use crate::errors::Wen3ExError;
+
 use super::{
     constants::VAULT_AUTHORITY_SEED,
-    state_ts::{MarketTsCancel, MarketTsCreate, MarketTsExchange},
+    state_st::{MarketStCancel, MarketStCreate, MarketStExchange},
 };
 
-pub fn create(ctx: Context<MarketTsCreate>, token_amount: u64, sol_amount: u64) -> Result<()> {
+pub fn create(ctx: Context<MarketStCreate>, token_amount: u64, sol_amount: u64) -> Result<()> {
+    let creator_account = ctx.accounts.creator.to_account_info().clone();
+    let vault_token_account = ctx.accounts.vault_token_account.to_account_info().clone();
     let market_account = &mut ctx.accounts.market_account;
 
     market_account.creator = *ctx.accounts.creator.key;
@@ -21,9 +28,17 @@ pub fn create(ctx: Context<MarketTsCreate>, token_amount: u64, sol_amount: u64) 
         ctx.program_id,
     );
 
-    token::transfer(
-        ctx.accounts.transfer_from_creator_to_vault_context(),
-        ctx.accounts.market_account.token_amount,
+    invoke(
+        &system_instruction::transfer(
+            creator_account.key,
+            vault_token_account.key,
+            market_account.sol_amount,
+        ),
+        &[
+            creator_account,
+            vault_token_account,
+            ctx.accounts.system_program.to_account_info(),
+        ],
     )?;
 
     // change vault_token_account authority from creator to program
@@ -35,19 +50,10 @@ pub fn create(ctx: Context<MarketTsCreate>, token_amount: u64, sol_amount: u64) 
     Ok(())
 }
 
-pub fn cancel(ctx: Context<MarketTsCancel>) -> Result<()> {
-    // let creator_token_account_info = ctx.accounts.creator_token_account.clone();
-    // let creator_token_account = ctx.accounts.creator_token_account.to_account_info();
+pub fn cancel(ctx: Context<MarketStCancel>) -> Result<()> {
     let market_account = ctx.accounts.market_account.clone();
     let market_account_key = market_account.key();
 
-    // let creator_token_account_info = creator_token_account_info.info();
-    //
-    // msg!(
-    //     "creator_token_account owner {:?}, {:?}",
-    //     creator_token_account.owner.to_string(),
-    //     creator_token_account_info.amount,
-    // );
     let (_vault_authority, vault_authority_bump) = Pubkey::find_program_address(
         &[VAULT_AUTHORITY_SEED, market_account_key.as_ref()],
         ctx.program_id,
@@ -58,14 +64,6 @@ pub fn cancel(ctx: Context<MarketTsCancel>) -> Result<()> {
         market_account_key.as_ref(),
         &[vault_authority_bump],
     ];
-
-    // for creator, selling token. creator take back the token right now.
-    token::transfer(
-        ctx.accounts
-            .transfer_from_vault_to_creator_context()
-            .with_signer(&[&authority_seeds[..]]),
-        ctx.accounts.market_account.token_amount,
-    )?;
 
     // close the vaultTokenAccount with sol back to creator
     token::close_account(
@@ -77,12 +75,10 @@ pub fn cancel(ctx: Context<MarketTsCancel>) -> Result<()> {
     Ok(())
 }
 
-pub fn exchange<'info>(ctx: Context<'_, '_, '_, 'info, MarketTsExchange<'info>>) -> Result<()> {
+pub fn exchange<'info>(ctx: Context<'_, '_, '_, 'info, MarketStExchange<'info>>) -> Result<()> {
     let creator_account = ctx.accounts.creator.to_account_info();
     let taker_account = ctx.accounts.taker.to_account_info();
-    let taker_token_account = ctx.accounts.taker_token_account.to_account_info();
-    // let taker_token_account_info = ctx.accounts.taker_token_account.clone();
-    // let vault_token_account = ctx.accounts.vault_token_account.to_account_info();
+    let vault_token_account = ctx.accounts.vault_token_account.to_account_info();
 
     let market_account = ctx.accounts.market_account.clone();
     let market_account_key = market_account.key();
@@ -98,29 +94,41 @@ pub fn exchange<'info>(ctx: Context<'_, '_, '_, 'info, MarketTsExchange<'info>>)
         &[vault_authority_bump],
     ];
 
-    // for taker, taker is buy token
-    // transfer sol from taker to creator
+    // for taker, taker is sell token
+    if ctx.remaining_accounts.is_empty() {
+        return err!(Wen3ExError::NoCreatorTokenAccount);
+    }
+    let creator_token_account = ctx.remaining_accounts[0].clone();
+
+    // transfer token from taker to creator
+    token::transfer(
+        ctx.accounts
+            .transfer_from_taker_to_creator_context(creator_token_account),
+        ctx.accounts.market_account.token_amount,
+    )?;
+
+    // transfer sol to taker
+    // let token_account_lamports_required = (Rent::get()?).minimum_balance(TokenAccount::LEN);
+    let token_account_lamports = vault_token_account.lamports();
+    let sol_to_creator = token_account_lamports - market_account.sol_amount;
+
+    // transfer some sol to creator，as a compensation for create the count
     solana_program::program::invoke(
         &solana_program::system_instruction::transfer(
             taker_account.key,
             creator_account.key,
-            market_account.sol_amount,
+            sol_to_creator,
         ),
         &[
             ctx.accounts.taker.to_account_info(),
             ctx.accounts.creator.to_account_info(),
         ],
     )?;
-    // transfer token from vault to taker
-    token::transfer(
-        ctx.accounts
-            .transfer_from_vault_to_taker_context(taker_token_account)
-            .with_signer(&[&authority_seeds[..]]),
-        ctx.accounts.market_account.token_amount,
-    )?;
+
+    // close with sol give to taker
     token::close_account(
         ctx.accounts
-            .close_vault_to_creator_context()
+            .close_vault_to_taker_context()
             .with_signer(&[&authority_seeds[..]]),
     )?;
 

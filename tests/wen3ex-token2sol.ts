@@ -16,14 +16,7 @@ import { assert, expect } from "chai";
 import { Wen3ex, IDL } from "../target/types/wen3ex";
 
 const VAULT_AUTHORITY_SEED = "vault-authority-seed";
-const VAULT_TOKEN_SOL_SEED = "vault-token-sol-seed";
-
-// type ExType = IdlTypes<Wen3ex>["ExType"];
-
-const ExTypeEnum = {
-  TokenToSol: { tokenToSol: {} },
-  SolToToken: { solToToken: {} },
-};
+const VAULT_TOKEN_SOL_SEED = "vault-token-2-sol-seed";
 
 describe("wen3ex token2sol", async () => {
   // Configure the client to use the local cluster.
@@ -59,7 +52,7 @@ describe("wen3ex token2sol", async () => {
   const mintAuthority = anchor.web3.Keypair.generate();
   const marketAccountKP = anchor.web3.Keypair.generate(); //
 
-  it.skip("wen3ex token2sol before", async () => {
+  it("wen3ex token2sol before", async () => {
     await airDrop(creatorKP.publicKey, 2);
     await airDrop(takerKP.publicKey, 2);
     let creatorSol = await printSolBalance(creatorKP.publicKey);
@@ -101,13 +94,13 @@ describe("wen3ex token2sol", async () => {
     expect(Number(creatorGoldAccount.amount)).to.eq(creatorAmount);
   });
 
-  it.skip("wen3ex token2sol is initialized!", async () => {
+  it("wen3ex token2sol is initialized!", async () => {
     // Add your test here.
     const tx = await program.methods.initialize().rpc();
     console.log("Your transaction signature", tx);
   });
 
-  it.skip("Create marketAccount token 2 sol", async () => {
+  it("Create marketAccount token 2 sol", async () => {
     let creatorSol = await printSolBalance(creatorKP.publicKey);
     console.log(1, { creatorSol }); // 1996499120
     const creatorGoldAta = await getATA(
@@ -163,7 +156,7 @@ describe("wen3ex token2sol", async () => {
     const filter = [
       {
         memcmp: {
-          offset: 8,
+          offset: 8 + 4,
           bytes: creatorKP.publicKey.toBase58(),
         },
       },
@@ -176,7 +169,7 @@ describe("wen3ex token2sol", async () => {
     console.log(4, { creatorSol }); // 1994459840
   });
 
-  it.skip("Close marketAccount token 2 sol without exchange", async () => {
+  it("Close marketAccount token 2 sol without exchange", async () => {
     let creatorGoldAta = await getATA(
       creatorKP,
       goldKP.publicKey,
@@ -245,7 +238,7 @@ describe("wen3ex token2sol", async () => {
   // After create market exchange { creatorSol: 1994459840, takerSol: 2000000000 }
   // ---- { creatorSol: 1994459840, takerSol: 1997960720 }
   // After exchange { creatorBalance: 2998280880, takerBalance: 997960720 }
-  it.skip("Exchange token 2 sol", async () => {
+  it("Exchange token 2 sol", async () => {
     let creatorSol = await printSolBalance(creatorKP.publicKey);
     let takerSol = await printSolBalance(takerKP.publicKey);
     console.log("Before exchange", { creatorSol, takerSol }); // 1998280880, 2000000000
@@ -282,25 +275,23 @@ describe("wen3ex token2sol", async () => {
     const [vaultAuthorityPDA] = getVaultAuthorityPDA();
     const data = await connection.getAccountInfo(vaultAuthorityPDA);
     console.log({ data });
-    try {
-      await program.methods
-        .marketTsExchange()
-        .accounts({
-          taker: takerKP.publicKey,
-          takerTokenAccount: takerGoldAta.address,
 
-          creator: creatorKP.publicKey,
-          marketAccount: marketAccountKP.publicKey,
-          vaultTokenAccount: vaultPDA,
-          vaultAuthority: vaultAuthorityPDA,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .signers([takerKP])
-        .rpc();
-    } catch (error) {
-      console.error(error);
-    }
+    await program.methods
+      .marketTsExchange()
+      .accounts({
+        taker: takerKP.publicKey,
+        takerTokenAccount: takerGoldAta.address,
+
+        creator: creatorKP.publicKey,
+        marketAccount: marketAccountKP.publicKey,
+        vaultTokenAccount: vaultPDA,
+        mint: goldKP.publicKey,
+        vaultAuthority: vaultAuthorityPDA,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([takerKP])
+      .rpc();
 
     takerGoldAta = await getATA(takerKP, goldKP.publicKey, takerKP.publicKey);
     creatorGoldAta = await getATA(
@@ -359,11 +350,8 @@ describe("wen3ex token2sol", async () => {
 
     await program.methods
       .marketTsCreate(
-        vaultBump,
-        goldKP.publicKey,
         new anchor.BN(creatorDepositAmount),
-        new anchor.BN(LAMPORTS_PER_SOL),
-        ExTypeEnum.TokenToSol
+        new anchor.BN(LAMPORTS_PER_SOL)
       )
       .accounts({
         marketAccount: marketAccountKP.publicKey,

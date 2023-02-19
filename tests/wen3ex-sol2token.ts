@@ -16,14 +16,7 @@ import { assert, expect } from "chai";
 import { Wen3ex, IDL } from "../target/types/wen3ex";
 
 const VAULT_AUTHORITY_SEED = "vault-authority-seed";
-const VAULT_TOKEN_SOL_SEED = "vault-token-sol-seed";
-
-// type ExType = IdlTypes<Wen3ex>["ExType"];
-
-const ExTypeEnum = {
-  TokenToSol: { tokenToSol: {} },
-  SolToToken: { solToToken: {} },
-};
+const VAULT_SOL_2_TOKEN_SEED = "vault-sol-2-token-seed";
 
 describe("wen3ex token2sol", async () => {
   // Configure the client to use the local cluster.
@@ -59,7 +52,7 @@ describe("wen3ex token2sol", async () => {
   const mintAuthority = anchor.web3.Keypair.generate();
   const marketAccountKP = anchor.web3.Keypair.generate(); //
 
-  it("wen3ex token2sol before", async () => {
+  it("wen3ex sol2token before", async () => {
     await airDrop(creatorKP.publicKey, 2);
     await airDrop(takerKP.publicKey, 2);
     let creatorSol = await printSolBalance(creatorKP.publicKey);
@@ -112,18 +105,12 @@ describe("wen3ex token2sol", async () => {
     let creatorSolBalance = await connection.getBalance(creatorKP.publicKey);
     console.log(1, { creatorSolBalance });
 
-    try {
-      await createSol2TokenMarket();
-    } catch (error) {
-      console.log(error);
-      throw error;
-    }
+    await createSol2TokenMarket();
 
-    const marketAccount = await program.account.marketTsAccount.fetch(
+    const marketAccount = await program.account.marketStAccount.fetch(
       marketAccountKP.publicKey
     );
 
-    expect(marketAccount.exType).to.haveOwnProperty("solToToken");
     expect(marketAccount.token.toBase58()).to.eq(rubyKP.publicKey.toBase58());
     expect(marketAccount.tokenAmount.toNumber()).to.eq(creatorRubyAmount);
     expect(marketAccount.solAmount.toNumber()).to.eq(LAMPORTS_PER_SOL);
@@ -143,7 +130,10 @@ describe("wen3ex token2sol", async () => {
       creatorKP.publicKey
     );
     const [vaultPDA, _vaultAccountBump] = PublicKey.findProgramAddressSync(
-      [Buffer.from(VAULT_TOKEN_SOL_SEED), marketAccountKP.publicKey.toBuffer()],
+      [
+        Buffer.from(VAULT_SOL_2_TOKEN_SEED),
+        marketAccountKP.publicKey.toBuffer(),
+      ],
       program.programId
     );
     const [vaultAuthorityPDA, _vaultAuthorityBump] =
@@ -163,7 +153,7 @@ describe("wen3ex token2sol", async () => {
     console.log({ marketAccountBalance });
 
     await program.methods
-      .marketTsCancel()
+      .marketStCancel()
       .accounts({
         creator: creatorKP.publicKey,
         creatorTokenAccount: creatorRubyAta.address,
@@ -188,19 +178,14 @@ describe("wen3ex token2sol", async () => {
   });
 
   it("Exchange the market sol 2 token", async () => {
+    let takerSolBalance = await connection.getBalance(takerKP.publicKey);
+    console.log({ takerSolBalance });
+    let creatorSolBalance = await connection.getBalance(creatorKP.publicKey);
+    console.log({ creatorSolBalance });
     await createSol2TokenMarket();
-    const [vaultPDA, _vaultAccountBump] = PublicKey.findProgramAddressSync(
-      [Buffer.from(VAULT_TOKEN_SOL_SEED), marketAccountKP.publicKey.toBuffer()],
-      program.programId
-    );
-    const [vaultAuthorityPDA, _vaultAuthorityBump] =
-      PublicKey.findProgramAddressSync(
-        [
-          Buffer.from(VAULT_AUTHORITY_SEED),
-          marketAccountKP.publicKey.toBuffer(),
-        ],
-        program.programId
-      );
+    const [vaultPDA, _vaultAccountBump] = getVaultPDA();
+    const [vaultAuthorityPDA, _vaultAuthorityBump] = getVaultAuthorityPDA();
+
     const takerRubyAta = await getATA(
       takerKP,
       rubyKP.publicKey,
@@ -208,15 +193,25 @@ describe("wen3ex token2sol", async () => {
     );
     const takerRubyAccount = await getAccount(connection, takerRubyAta.address);
     console.log(Number(takerRubyAccount.amount));
-
+    creatorSolBalance = await connection.getBalance(creatorKP.publicKey);
+    console.log({ creatorSolBalance });
     const creatorRubyAta = await getATA(
       creatorKP,
       rubyKP.publicKey,
       creatorKP.publicKey
     );
+
+    console.log("---");
+    creatorSolBalance = await connection.getBalance(creatorKP.publicKey);
+    console.log({ creatorSolBalance });
+    let creatorRubyAtaSolBalance = await connection.getBalance(
+      creatorRubyAta.address
+    );
+    console.log({ creatorRubyAtaSolBalance });
+    console.log("++++");
     try {
       await program.methods
-        .marketTsExchange()
+        .marketStExchange()
         .accounts({
           taker: takerKP.publicKey,
           takerTokenAccount: takerRubyAta.address,
@@ -243,10 +238,14 @@ describe("wen3ex token2sol", async () => {
       throw error;
     }
 
-    const takerSolBalance = await connection.getBalance(takerKP.publicKey);
+    takerSolBalance = await connection.getBalance(takerKP.publicKey);
     console.log({ takerSolBalance });
-    const creatorSolBalance = await connection.getBalance(creatorKP.publicKey);
+    creatorSolBalance = await connection.getBalance(creatorKP.publicKey);
     console.log({ creatorSolBalance });
+    creatorRubyAtaSolBalance = await connection.getBalance(
+      creatorRubyAta.address
+    );
+    console.log({ creatorRubyAtaSolBalance });
   });
 
   async function printSolBalance(key: PublicKey) {
@@ -256,7 +255,10 @@ describe("wen3ex token2sol", async () => {
 
   function getVaultPDA() {
     return PublicKey.findProgramAddressSync(
-      [Buffer.from(VAULT_TOKEN_SOL_SEED), marketAccountKP.publicKey.toBuffer()],
+      [
+        Buffer.from(VAULT_SOL_2_TOKEN_SEED),
+        marketAccountKP.publicKey.toBuffer(),
+      ],
       program.programId
     );
   }
@@ -279,14 +281,11 @@ describe("wen3ex token2sol", async () => {
 
     console.log("marketAccountKP", marketAccountKP.publicKey.toBase58());
 
-    await program.account.marketTsAccount.createInstruction(marketAccountKP);
+    // await program.account.marketTsAccount.createInstruction(marketAccountKP);
     await program.methods
-      .marketTsCreate(
-        vaultBump,
-        rubyKP.publicKey,
+      .marketStCreate(
         new anchor.BN(creatorRubyAmount),
-        new anchor.BN(LAMPORTS_PER_SOL),
-        ExTypeEnum.SolToToken
+        new anchor.BN(LAMPORTS_PER_SOL)
       )
       .accounts({
         marketAccount: marketAccountKP.publicKey,
@@ -299,7 +298,7 @@ describe("wen3ex token2sol", async () => {
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .preInstructions([
-        await program.account.marketTsAccount.createInstruction(
+        await program.account.marketStAccount.createInstruction(
           marketAccountKP
         ),
       ])

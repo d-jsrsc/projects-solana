@@ -42,23 +42,13 @@ pub mod wen3ex {
         instructions::market_tt::exchange(ctx)
     }
 
-    // market token sol, sell/buy token
+    // market token sol, sell token
     pub fn market_ts_create(
         ctx: Context<MarketTsCreate>,
-        vault_account_bump: u8,
-        token: Pubkey,
         token_amount: u64,
         sol_amount: u64,
-        ex_type: ExType,
     ) -> Result<()> {
-        instructions::market_ts::create(
-            ctx,
-            vault_account_bump,
-            token,
-            token_amount,
-            sol_amount,
-            ex_type,
-        )
+        instructions::market_ts::create(ctx, token_amount, sol_amount)
     }
 
     pub fn market_ts_cancel(ctx: Context<MarketTsCancel>) -> Result<()> {
@@ -71,6 +61,25 @@ pub mod wen3ex {
         // Ok(())
         msg!("market_ts_exchange");
         instructions::market_ts::exchange(ctx)
+    }
+
+    // market sol token, buy token
+    pub fn market_st_create(
+        ctx: Context<MarketStCreate>,
+        token_amount: u64,
+        sol_amount: u64,
+    ) -> Result<()> {
+        instructions::market_st::create(ctx, token_amount, sol_amount)
+    }
+
+    pub fn market_st_cancel(ctx: Context<MarketStCancel>) -> Result<()> {
+        instructions::market_st::cancel(ctx)
+    }
+
+    pub fn market_st_exchange<'info>(
+        ctx: Context<'_, '_, '_, 'info, MarketStExchange<'info>>,
+    ) -> Result<()> {
+        instructions::market_st::exchange(ctx)
     }
 }
 

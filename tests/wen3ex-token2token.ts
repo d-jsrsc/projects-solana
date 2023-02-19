@@ -62,13 +62,13 @@ describe("wen3ex token2token", async () => {
   const mintAuthority = anchor.web3.Keypair.generate();
   const marketAccountKP = anchor.web3.Keypair.generate(); //
 
-  it.skip("Is initialized!", async () => {
+  it("Is initialized!", async () => {
     // Add your test here.
     const tx = await program.methods.initialize().rpc();
     console.log("Your transaction signature", tx);
   });
 
-  it.skip("wen3ex token2token before", async () => {
+  it("wen3ex token2token before", async () => {
     await airDrop(creatorKP.publicKey, 2);
     await airDrop(takerKP.publicKey, 2);
 
@@ -123,7 +123,7 @@ describe("wen3ex token2token", async () => {
     expect(Number(takerRubyAccount.amount)).to.eq(takerAmount);
   });
 
-  it.skip("Create marketAccount token 2 token", async () => {
+  it("Create marketAccount token 2 token", async () => {
     const creatorRubyAta = await getATA(
       creatorKP,
       rubyKP.publicKey,
@@ -180,7 +180,7 @@ describe("wen3ex token2token", async () => {
     const filter = [
       {
         memcmp: {
-          offset: 8,
+          offset: 8 + 4,
           bytes: creatorKP.publicKey.toBase58(),
         },
       },
@@ -190,7 +190,7 @@ describe("wen3ex token2token", async () => {
     expect(userTTMarkets.length).to.eq(1);
   });
 
-  it.skip("Close marketAccount token 2 token without exchange", async () => {
+  it("Close marketAccount token 2 token without exchange", async () => {
     let creatorGoldAta = await getATA(
       creatorKP,
       goldKP.publicKey,
@@ -229,7 +229,7 @@ describe("wen3ex token2token", async () => {
     assert.ok(Number(creatorGoldAta.amount) == creatorAmount);
   });
 
-  it.skip("Exchange token 2 token", async () => {
+  it("Exchange token 2 token", async () => {
     await createT2tMarket();
 
     let takerRubyAta = await getATA(
