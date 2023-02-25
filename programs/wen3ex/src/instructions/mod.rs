@@ -14,3 +14,8 @@ pub mod market_st;
 pub use market_st::*;
 pub mod state_st;
 pub use state_st::*;
+
+pub mod market_ns;
+pub use market_ns::*;
+pub mod state_ns;
+pub use state_ns::*;

@@ -81,6 +81,27 @@ pub mod wen3ex {
     ) -> Result<()> {
         instructions::market_st::exchange(ctx)
     }
+
+    // market nft sol, sell nft
+    pub fn market_nft_to_sol_create(
+        ctx: Context<MarketNftToSolCreate>,
+        nft_amount: u64,
+        sol_amount: u64,
+    ) -> Result<()> {
+        instructions::market_ns::create(ctx, nft_amount, sol_amount)
+    }
+
+    pub fn market_nft_to_sol_cancel(ctx: Context<MarketNftToSolCancel>) -> Result<()> {
+        instructions::market_ns::cancel(ctx)
+    }
+
+    pub fn market_nft_to_sol_exchange<'info>(
+        ctx: Context<'_, '_, '_, 'info, MarketNftToSolExchange<'info>>,
+    ) -> Result<()> {
+        // Ok(())
+        msg!("market_ts_exchange");
+        instructions::market_ns::exchange(ctx)
+    }
 }
 
 #[derive(Accounts)]
